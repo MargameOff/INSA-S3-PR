@@ -1425,8 +1425,10 @@ void *wait_for_reconnection(void *arg)
     // Retirer la partie des deux joueurs
     remove_game_from_player(disconnected_player, game);
     remove_game_from_player(other_player, game);
+    update_player_score(other_player);
 
     // Retirer le joueur déconnecté
+    update_player_score(disconnected_player);
     remove_player_from_players(disconnected_player);
     pthread_mutex_destroy(&disconnected_player->player_mutex);
     free(disconnected_player);
@@ -1435,8 +1437,6 @@ void *wait_for_reconnection(void *arg)
     remove_game_from_games(game);
     pthread_mutex_destroy(&game->game_mutex);
     free(game);
-    update_player_score(other_player);
-    update_player_score(disconnected_player);
     return NULL;
 }
 
