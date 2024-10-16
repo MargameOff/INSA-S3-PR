@@ -1508,7 +1508,7 @@ int main()
     // Configuration de l'adresse du serveur
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = INADDR_ANY;
-    server_addr.sin_port = htons(8080);
+    server_addr.sin_port = htons(PORT);
 
     // Liaison du socket
     if (bind(server_sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
@@ -1524,7 +1524,7 @@ int main()
         exit(EXIT_FAILURE);
     }
 
-    printf("Serveur en attente de joueurs sur le port 8080...\n");
+    printf("Serveur en attente de joueurs sur le port %d...\n", PORT);
 
     // Charger les utilisateurs
     load_users();

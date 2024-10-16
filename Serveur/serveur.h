@@ -10,6 +10,7 @@
 #include <pthread.h>
 
 // Constants
+#define PORT 8080
 #define TIME_OUT_TIME 30
 #define USERS_FILE "users.dat"
 #define SCORES_FILE "scores.dat"
