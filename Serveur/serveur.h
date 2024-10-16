@@ -12,6 +12,7 @@
 // Constants
 #define TIME_OUT_TIME 30
 #define USERS_FILE "users.dat"
+#define SCORES_FILE "scores.dat"
 #define MAX_USERS 1000
 #define MAX_GAMES_PER_PLAYER 5
 #define BOARD_SIZE 12 // Nombre total de trou sur le plateau de jeu
@@ -73,6 +74,15 @@ typedef struct user_credentials_t
     char pseudo[32];
     char password[128];
 } user_credentials_t;
+
+typedef struct user_score_t
+{
+    char pseudo[32];
+    int wins;
+    int losses;
+    int draws;
+} user_score_t;
+
 
 // Prototypes
 void *client_handler(void *arg);

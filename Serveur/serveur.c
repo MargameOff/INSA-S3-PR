@@ -13,6 +13,92 @@ user_credentials_t users[MAX_USERS];
 int user_count = 0;
 pthread_mutex_t users_file_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+user_score_t user_scores[MAX_USERS];
+int score_count = 0;
+pthread_mutex_t scores_file_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+void load_scores()
+{
+    pthread_mutex_lock(&scores_file_mutex);
+    FILE *file = fopen(SCORES_FILE, "rb");
+    if (file != NULL)
+    {
+        fread(&score_count, sizeof(int), 1, file);
+        fread(user_scores, sizeof(user_score_t), score_count, file);
+        fclose(file);
+    }
+    else
+    {
+        // Si le fichier n'existe pas, on initialise le score_count à 0
+        score_count = 0;
+    }
+    pthread_mutex_unlock(&scores_file_mutex);
+}
+
+void save_scores()
+{
+    pthread_mutex_lock(&scores_file_mutex);
+    FILE *file = fopen(SCORES_FILE, "wb");
+    if (file != NULL)
+    {
+        fwrite(&score_count, sizeof(int), 1, file);
+        fwrite(user_scores, sizeof(user_score_t), score_count, file);
+        fclose(file);
+    }
+    pthread_mutex_unlock(&scores_file_mutex);
+}
+
+int find_score_index(const char *pseudo)
+{
+    for (int i = 0; i < score_count; ++i)
+    {
+        if (strcmp(user_scores[i].pseudo, pseudo) == 0)
+        {
+            return i;
+        }
+    }
+    return -1;
+}
+
+int load_player_score(player_t *player)
+{
+    pthread_mutex_lock(&player->player_mutex);
+    int index = find_score_index(player->pseudo);
+    if (index == -1)
+    {
+        // Si le joueur n'a pas encore de score, on l'initialise
+        strcpy(user_scores[score_count].pseudo, player->pseudo);
+        user_scores[score_count].wins = 0;
+        user_scores[score_count].losses = 0;
+        user_scores[score_count].draws = 0;
+        index = score_count;
+        score_count++;
+        save_scores();
+    }
+    // Charger les scores dans le joueur
+    player->wins = user_scores[index].wins;
+    player->losses = user_scores[index].losses;
+    player->draws = user_scores[index].draws;
+    pthread_mutex_unlock(&player->player_mutex);
+    return 0;
+}
+
+void update_player_score(player_t *player)
+{
+    pthread_mutex_lock(&player->player_mutex);
+    int index = find_score_index(player->pseudo);
+    if (index != -1)
+    {
+        user_scores[index].wins = player->wins;
+        user_scores[index].losses = player->losses;
+        user_scores[index].draws = player->draws;
+        save_scores();
+    }
+    pthread_mutex_unlock(&player->player_mutex);
+}
+
+
+
 void load_users()
 {
     pthread_mutex_lock(&users_file_mutex);
@@ -780,7 +866,10 @@ void abandon_game(player_t *player, int game_id)
 
         // Mettre à jour les statistiques
         player->losses++;
+        
+
         other_player->wins++;
+
 
         // Informer l'autre joueur
         snprintf(buffer, sizeof(buffer), RED "%s a abandonné la partie %d. Vous remportez la partie !\n" RESET, player->pseudo, game->game_id);
@@ -806,6 +895,8 @@ void abandon_game(player_t *player, int game_id)
         remove_game_from_games(game);
         pthread_mutex_destroy(&game->game_mutex);
         free(game);
+        update_player_score(player);
+        update_player_score(other_player);
     }
     else
     {
@@ -903,10 +994,12 @@ void end_game(game_t *game)
         pthread_mutex_lock(&game->player1->player_mutex);
         game->player1->losses++;
         pthread_mutex_unlock(&game->player1->player_mutex);
+        update_player_score(game->player1);
 
         pthread_mutex_lock(&game->player2->player_mutex);
         game->player2->wins++;
         pthread_mutex_unlock(&game->player2->player_mutex);
+        update_player_score(game->player2);
     }
     else
     {
@@ -1326,6 +1419,7 @@ void *wait_for_reconnection(void *arg)
 
     // Mettre à jour les statistiques
     other_player->wins++;
+    disconnected_player->losses++;
     pthread_mutex_unlock(&other_player->player_mutex);
 
     // Retirer la partie des deux joueurs
@@ -1341,7 +1435,8 @@ void *wait_for_reconnection(void *arg)
     remove_game_from_games(game);
     pthread_mutex_destroy(&game->game_mutex);
     free(game);
-
+    update_player_score(other_player);
+    update_player_score(disconnected_player);
     return NULL;
 }
 
@@ -1433,6 +1528,8 @@ int main()
 
     // Charger les utilisateurs
     load_users();
+    // Charger les scores
+    load_scores();  
 
     socklen_t clilen = sizeof(client_addr);
 
@@ -1514,6 +1611,7 @@ int main()
 
                         snprintf(buffer, sizeof(buffer), GREEN "Enregistrement réussi ! Vous êtes maintenant connecté.\n" RESET);
                         send(player->sockfd, buffer, strlen(buffer), 0);
+                        load_player_score(player);
                     }
                     else
                     {
@@ -1557,6 +1655,8 @@ int main()
 
                     snprintf(buffer, sizeof(buffer), GREEN "Connexion réussie !\n" RESET);
                     send(player->sockfd, buffer, strlen(buffer), 0);
+                    // Charger les scores du joueur
+                    load_player_score(player);
                 }
                 else
                 {
