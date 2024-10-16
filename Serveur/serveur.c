@@ -1371,155 +1371,190 @@ int main()
         pthread_mutex_init(&player->player_mutex, NULL);
 
         // Recevoir le pseudo
-        recv(player->sockfd, player->pseudo, 32, 0);
-        player->pseudo[strcspn(player->pseudo, "\r\n")] = 0; // Enlever le retour à la ligne
-
-        printf("Tentative de connexion pour le pseudo : %s\n", player->pseudo);
-
-        // Vérifier si le pseudo existe déjà dans le fichier des utilisateurs
-        int user_index = find_user_index(player->pseudo);
-
-        if (user_index == -1)
+        if (recv(player->sockfd, player->pseudo, 32, 0))
         {
-            // Pseudo inconnu, inviter l'utilisateur à s'enregistrer
-            snprintf(buffer, sizeof(buffer), "Bienvenue %s ! Veuillez vous enregistrer.\nEntrez un mot de passe : ", player->pseudo);
-            send(player->sockfd, buffer, strlen(buffer), 0);
+            player->pseudo[strcspn(player->pseudo, "\r\n")] = 0; // Enlever le retour à la ligne
 
-            // Recevoir le mot de passe
-            char password[128];
-            recv(player->sockfd, password, sizeof(password), 0);
-            password[strcspn(password, "\r\n")] = 0; // Enlever le retour à la ligne
+            printf("Tentative de connexion pour le pseudo : %s\n", player->pseudo);
 
-            // Demander la confirmation du mot de passe
-            snprintf(buffer, sizeof(buffer), "Confirmez le mot de passe : ");
-            send(player->sockfd, buffer, strlen(buffer), 0);
+            // Vérifier si le pseudo existe déjà dans le fichier des utilisateurs
+            int user_index = find_user_index(player->pseudo);
 
-            char password_confirm[128];
-            recv(player->sockfd, password_confirm, sizeof(password_confirm), 0);
-            password_confirm[strcspn(password_confirm, "\r\n")] = 0; // Enlever le retour à la ligne
-
-            // Vérifier que les mots de passe correspondent
-            if (strcmp(password, password_confirm) != 0)
+            if (user_index == -1)
             {
-                snprintf(buffer, sizeof(buffer), RED "Les mots de passe ne correspondent pas. Veuillez réessayer.\n" RESET);
+                // Pseudo inconnu, inviter l'utilisateur à s'enregistrer
+                snprintf(buffer, sizeof(buffer), "Bienvenue %s ! Veuillez vous enregistrer.\nEntrez un mot de passe : ", player->pseudo);
                 send(player->sockfd, buffer, strlen(buffer), 0);
-                close(player->sockfd);
-                pthread_mutex_destroy(&player->player_mutex);
-                free(player);
-                continue;
-            }
 
-            // Enregistrer le nouvel utilisateur
-            int reg_result = register_user(player->pseudo, password);
-            if (reg_result != 0)
-            {
-                snprintf(buffer, sizeof(buffer), RED "Erreur lors de l'enregistrement de l'utilisateur.\n" RESET);
-                send(player->sockfd, buffer, strlen(buffer), 0);
-                close(player->sockfd);
-                pthread_mutex_destroy(&player->player_mutex);
-                free(player);
-                continue;
-            }
-
-            snprintf(buffer, sizeof(buffer), GREEN "Enregistrement réussi ! Vous êtes maintenant connecté.\n" RESET);
-            send(player->sockfd, buffer, strlen(buffer), 0);
-        }
-        else
-        {
-            // Pseudo connu, demander le mot de passe
-            snprintf(buffer, sizeof(buffer), "Pseudo reconnu. Veuillez entrer votre mot de passe : ");
-            send(player->sockfd, buffer, strlen(buffer), 0);
-
-            // Recevoir le mot de passe
-            char password[128];
-            recv(player->sockfd, password, sizeof(password), 0);
-            password[strcspn(password, "\r\n")] = 0; // Enlever le retour à la ligne
-
-            // Vérifier le mot de passe
-            int auth_result = verify_user_password(player->pseudo, password);
-            if (auth_result != 0)
-            {
-                snprintf(buffer, sizeof(buffer), RED "Mot de passe incorrect. Connexion refusée.\n" RESET);
-                send(player->sockfd, buffer, strlen(buffer), 0);
-                close(player->sockfd);
-                pthread_mutex_destroy(&player->player_mutex);
-                free(player);
-                continue;
-            }
-
-            snprintf(buffer, sizeof(buffer), GREEN "Connexion réussie !\n" RESET);
-            send(player->sockfd, buffer, strlen(buffer), 0);
-        }
-
-        // Vérifier si le pseudo est déjà utilisé en jeu
-        int pseudo_used_in_game = 0;
-        pthread_mutex_lock(&players_mutex);
-        for (int i = 0; i < player_count; ++i)
-        {
-            if (strcmp(players[i]->pseudo, player->pseudo) == 0)
-            {
-                if (!players[i]->connected)
+                // Recevoir le mot de passe
+                char password[128];
+                if (recv(player->sockfd, password, sizeof(password), 0))
                 {
-                    // Reconnexion du joueur
-                    pthread_mutex_lock(&players[i]->player_mutex);
+                    password[strcspn(password, "\r\n")] = 0; // Enlever le retour à la ligne
 
-                    // Mettre à jour le socket et l'état du joueur
-                    players[i]->sockfd = new_sockfd;
-                    players[i]->connected = 1;
+                    // Demander la confirmation du mot de passe
+                    snprintf(buffer, sizeof(buffer), "Confirmez le mot de passe : ");
+                    send(player->sockfd, buffer, strlen(buffer), 0);
 
-                    // Informer le joueur de la reconnexion
-                    snprintf(buffer, sizeof(buffer), GREEN "Vous avez été reconnecté avec succès.\n" RESET);
-                    send(players[i]->sockfd, buffer, strlen(buffer), 0);
+                    char password_confirm[128];
+                    if (recv(player->sockfd, password_confirm, sizeof(password_confirm), 0))
+                    {
+                        password_confirm[strcspn(password_confirm, "\r\n")] = 0; // Enlever le retour à la ligne
 
-                    pthread_mutex_unlock(&players[i]->player_mutex);
+                        // Vérifier que les mots de passe correspondent
+                        if (strcmp(password, password_confirm) != 0)
+                        {
+                            snprintf(buffer, sizeof(buffer), RED "Les mots de passe ne correspondent pas. Veuillez réessayer.\n" RESET);
+                            send(player->sockfd, buffer, strlen(buffer), 0);
+                            close(player->sockfd);
+                            pthread_mutex_destroy(&player->player_mutex);
+                            free(player);
+                            continue;
+                        }
 
-                    printf("Joueur %s reconnecté.\n", player->pseudo);
-                    free(player);
+                        // Enregistrer le nouvel utilisateur
+                        int reg_result = register_user(player->pseudo, password);
+                        if (reg_result != 0)
+                        {
+                            snprintf(buffer, sizeof(buffer), RED "Erreur lors de l'enregistrement de l'utilisateur.\n" RESET);
+                            send(player->sockfd, buffer, strlen(buffer), 0);
+                            close(player->sockfd);
+                            pthread_mutex_destroy(&player->player_mutex);
+                            free(player);
+                            continue;
+                        }
 
-                    // Relancer le client_handler pour le joueur reconnecté
-                    pthread_create(&players[i]->thread, NULL, client_handler, (void *)players[i]);
-                    pthread_detach(players[i]->thread);
-
-                    pthread_mutex_unlock(&players_mutex);
-                    goto next_client; // Passer au prochain client
+                        snprintf(buffer, sizeof(buffer), GREEN "Enregistrement réussi ! Vous êtes maintenant connecté.\n" RESET);
+                        send(player->sockfd, buffer, strlen(buffer), 0);
+                    }
+                    else
+                    {
+                        close(player->sockfd);
+                        pthread_mutex_destroy(&player->player_mutex);
+                        free(player);
+                        continue;
+                    }
                 }
                 else
                 {
-                    pseudo_used_in_game = 1;
-                    break;
+                    close(player->sockfd);
+                    pthread_mutex_destroy(&player->player_mutex);
+                    free(player);
+                    continue;
                 }
             }
-        }
+            else
+            {
+                // Pseudo connu, demander le mot de passe
+                snprintf(buffer, sizeof(buffer), "Pseudo reconnu. Veuillez entrer votre mot de passe : ");
+                send(player->sockfd, buffer, strlen(buffer), 0);
 
-        if (pseudo_used_in_game)
+                // Recevoir le mot de passe
+                char password[128];
+                if (recv(player->sockfd, password, sizeof(password), 0))
+                {
+                    password[strcspn(password, "\r\n")] = 0; // Enlever le retour à la ligne
+
+                    // Vérifier le mot de passe
+                    int auth_result = verify_user_password(player->pseudo, password);
+                    if (auth_result != 0)
+                    {
+                        snprintf(buffer, sizeof(buffer), RED "Mot de passe incorrect. Connexion refusée.\n" RESET);
+                        send(player->sockfd, buffer, strlen(buffer), 0);
+                        close(player->sockfd);
+                        pthread_mutex_destroy(&player->player_mutex);
+                        free(player);
+                        continue;
+                    }
+
+                    snprintf(buffer, sizeof(buffer), GREEN "Connexion réussie !\n" RESET);
+                    send(player->sockfd, buffer, strlen(buffer), 0);
+                }
+                else
+                {
+                    close(player->sockfd);
+                    pthread_mutex_destroy(&player->player_mutex);
+                    free(player);
+                    continue;
+                }
+            }
+
+            // Vérifier si le pseudo est déjà utilisé en jeu
+            int pseudo_used_in_game = 0;
+            pthread_mutex_lock(&players_mutex);
+            for (int i = 0; i < player_count; ++i)
+            {
+                if (strcmp(players[i]->pseudo, player->pseudo) == 0)
+                {
+                    if (!players[i]->connected)
+                    {
+                        // Reconnexion du joueur
+                        pthread_mutex_lock(&players[i]->player_mutex);
+
+                        // Mettre à jour le socket et l'état du joueur
+                        players[i]->sockfd = new_sockfd;
+                        players[i]->connected = 1;
+
+                        // Informer le joueur de la reconnexion
+                        snprintf(buffer, sizeof(buffer), GREEN "Vous avez été reconnecté avec succès.\n" RESET);
+                        send(players[i]->sockfd, buffer, strlen(buffer), 0);
+
+                        pthread_mutex_unlock(&players[i]->player_mutex);
+
+                        printf("Joueur %s reconnecté.\n", player->pseudo);
+                        free(player);
+
+                        // Relancer le client_handler pour le joueur reconnecté
+                        pthread_create(&players[i]->thread, NULL, client_handler, (void *)players[i]);
+                        pthread_detach(players[i]->thread);
+
+                        pthread_mutex_unlock(&players_mutex);
+                        goto next_client; // Passer au prochain client
+                    }
+                    else
+                    {
+                        pseudo_used_in_game = 1;
+                        break;
+                    }
+                }
+            }
+
+            if (pseudo_used_in_game)
+            {
+                snprintf(buffer, sizeof(buffer), RED "Ce pseudo est déjà utilisé en jeu. Veuillez réessayer plus tard.\n" RESET);
+                send(player->sockfd, buffer, strlen(buffer), 0);
+                close(player->sockfd);
+                pthread_mutex_destroy(&player->player_mutex);
+                free(player);
+                pthread_mutex_unlock(&players_mutex);
+                continue;
+            }
+
+            // Ajouter le joueur à la liste
+            if (player_count >= MAX_PLAYERS)
+            {
+                snprintf(buffer, sizeof(buffer), RED "Le serveur est plein. Veuillez réessayer plus tard.\n" RESET);
+                send(player->sockfd, buffer, strlen(buffer), 0);
+                close(player->sockfd);
+                pthread_mutex_destroy(&player->player_mutex);
+                free(player);
+                pthread_mutex_unlock(&players_mutex);
+                continue;
+            }
+
+            players[player_count++] = player;
+            pthread_mutex_unlock(&players_mutex);
+
+            // Créer un thread pour gérer ce client
+            pthread_create(&player->thread, NULL, client_handler, (void *)player);
+            pthread_detach(player->thread);
+        }
+        else
         {
-            snprintf(buffer, sizeof(buffer), RED "Ce pseudo est déjà utilisé en jeu. Veuillez réessayer plus tard.\n" RESET);
-            send(player->sockfd, buffer, strlen(buffer), 0);
             close(player->sockfd);
             pthread_mutex_destroy(&player->player_mutex);
             free(player);
-            pthread_mutex_unlock(&players_mutex);
-            continue;
         }
-
-        // Ajouter le joueur à la liste
-        if (player_count >= MAX_PLAYERS)
-        {
-            snprintf(buffer, sizeof(buffer), RED "Le serveur est plein. Veuillez réessayer plus tard.\n" RESET);
-            send(player->sockfd, buffer, strlen(buffer), 0);
-            close(player->sockfd);
-            pthread_mutex_destroy(&player->player_mutex);
-            free(player);
-            pthread_mutex_unlock(&players_mutex);
-            continue;
-        }
-
-        players[player_count++] = player;
-        pthread_mutex_unlock(&players_mutex);
-
-        // Créer un thread pour gérer ce client
-        pthread_create(&player->thread, NULL, client_handler, (void *)player);
-        pthread_detach(player->thread);
 
     next_client:
         continue;
