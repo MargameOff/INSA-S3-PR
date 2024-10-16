@@ -269,7 +269,7 @@ void accept_challenge(player_t *player)
     new_game->player1 = challenger;
     new_game->player2 = player;
     init_board(new_game->board);
-    new_game->turn = 0; // Le challenger commence
+    new_game->turn = rand() % 2; // On choisie aléatoirement qui commence
     new_game->game_over = 0;
     new_game->waiting_reconnect = 0;
     pthread_mutex_init(&new_game->game_mutex, NULL);
@@ -301,8 +301,19 @@ void accept_challenge(player_t *player)
     print_board(player->sockfd, 1, player, challenger, new_game->board, new_game->game_id, new_game);
 
     // Informer le joueur qui commence
-    snprintf(buffer, sizeof(buffer), GREEN "C'est à vous de jouer.\n" RESET);
-    send(challenger->sockfd, buffer, strlen(buffer), 0);
+    snprintf(buffer, sizeof(buffer), GREEN "[Partie %d] Vous commcencez la partie !\n" RESET, new_game->game_id);
+    if (new_game->turn == 0)
+    {
+        send(challenger->sockfd, buffer, strlen(buffer), 0);
+        snprintf(buffer, sizeof(buffer), RED "[Partie %d] C'est à votre adversaire de commcencer la partie.\n" RESET, new_game->game_id);
+        send(player->sockfd, buffer, strlen(buffer), 0);
+    }
+    else
+    {
+        send(player->sockfd, buffer, strlen(buffer), 0);
+        snprintf(buffer, sizeof(buffer), RED "[Partie %d] C'est à votre adversaire de jouer\n" RESET, new_game->game_id);
+        send(challenger->sockfd, buffer, strlen(buffer), 0);
+    }
 
     pthread_mutex_unlock(&challenger->player_mutex);
     pthread_mutex_unlock(&player->player_mutex);
@@ -679,9 +690,17 @@ void make_move_command(player_t *player, int game_id, int move)
                     // Informer le prochain joueur que c'est son tour
                     snprintf(buffer, sizeof(buffer), GREEN "[Partie %d] C'est à vous de jouer.\n" RESET, game->game_id);
                     if (game->turn == 0)
+                    {
                         send(game->player1->sockfd, buffer, strlen(buffer), 0);
-                    else
+                        snprintf(buffer, sizeof(buffer), RED "[Partie %d] C'est à votre adversaire de jouer.\n" RESET, game->game_id);
                         send(game->player2->sockfd, buffer, strlen(buffer), 0);
+                    }
+                    else
+                    {
+                        send(game->player2->sockfd, buffer, strlen(buffer), 0);
+                        snprintf(buffer, sizeof(buffer), RED "[Partie %d] C'est à votre adversaire de jouer.\n" RESET, game->game_id);
+                        send(game->player1->sockfd, buffer, strlen(buffer), 0);
+                    }
                 }
                 else
                 {
@@ -1220,11 +1239,19 @@ void *wait_for_reconnection(void *arg)
             print_board(other_player->sockfd, 1 - player_id, other_player, disconnected_player, game->board, game->game_id, game);
 
             // Informer le joueur que c'est son tour
-            snprintf(buffer, sizeof(buffer), GREEN "C'est à vous de jouer.\n" RESET);
+            snprintf(buffer, sizeof(buffer), GREEN "[Partie %d] C'est à vous de jouer.\n" RESET, game->game_id);
             if (game->turn == 0)
+            {
                 send(game->player1->sockfd, buffer, strlen(buffer), 0);
-            else
+                snprintf(buffer, sizeof(buffer), RED "[Partie %d] C'est à votre adversaire de jouer.\n" RESET, game->game_id);
                 send(game->player2->sockfd, buffer, strlen(buffer), 0);
+            }
+            else
+            {
+                send(game->player2->sockfd, buffer, strlen(buffer), 0);
+                snprintf(buffer, sizeof(buffer), RED "[Partie %d] C'est à votre adversaire de jouer.\n" RESET, game->game_id);
+                send(game->player1->sockfd, buffer, strlen(buffer), 0);
+            }
 
             return NULL; // Fin du thread
         }
