@@ -803,6 +803,7 @@ void abandon_game(player_t *player, int game_id)
 
         // Nettoyer la partie
         pthread_mutex_unlock(&game->game_mutex);
+        remove_game_from_games(game);
         pthread_mutex_destroy(&game->game_mutex);
         free(game);
     }
@@ -936,7 +937,7 @@ void end_game(game_t *game)
 }
 
 /*
-    On retire la partie de la lsite des parties du joueur
+    On retire la partie de la liste des parties du joueur
 */
 void remove_game_from_player(player_t *player, game_t *game)
 {
@@ -960,6 +961,60 @@ void remove_game_from_player(player_t *player, game_t *game)
         player->game_count--;
     }
     pthread_mutex_unlock(&player->player_mutex);
+}
+
+/*
+    On retire la partie de la liste des parties
+*/
+void remove_game_from_games(game_t *game)
+{
+    pthread_mutex_lock(&games_mutex);
+    int index = -1;
+    for (int i = 0; i < game_count; ++i)
+    {
+        if (games[i]->game_id == game->game_id)
+        {
+            index = i;
+            break;
+        }
+    }
+
+    if (index != -1)
+    {
+        for (int i = index; i < game_count - 1; ++i)
+        {
+            games[i] = games[i + 1];
+        }
+        game_count--;
+    }
+    pthread_mutex_unlock(&games_mutex);
+}
+
+/*
+    On retire le joueur de la liste des joueurs
+*/
+void remove_player_from_players(player_t *player)
+{
+    pthread_mutex_lock(&players_mutex);
+    int index = -1;
+    for (int i = 0; i < player_count; ++i)
+    {
+        if (players[i]->pseudo == player->pseudo)
+        {
+            index = i;
+            break;
+        }
+    }
+
+    if (index != -1)
+    {
+        for (int i = index; i < player_count - 1; ++i)
+        {
+            players[i] = players[i + 1];
+        }
+        player_count--;
+    }
+    pthread_mutex_unlock(&players_mutex);
 }
 
 void handle_command(player_t *player, char *command)
@@ -1277,7 +1332,13 @@ void *wait_for_reconnection(void *arg)
     remove_game_from_player(disconnected_player, game);
     remove_game_from_player(other_player, game);
 
+    // Retirer le joueur déconnecté
+    remove_player_from_players(disconnected_player);
+    pthread_mutex_destroy(&disconnected_player->player_mutex);
+    free(disconnected_player);
+
     // Nettoyer la partie
+    remove_game_from_games(game);
     pthread_mutex_destroy(&game->game_mutex);
     free(game);
 
@@ -1529,6 +1590,9 @@ int main()
                         pthread_mutex_unlock(&players[i]->player_mutex);
 
                         printf("Joueur %s reconnecté.\n", player->pseudo);
+                        
+                        // Supprimer le joueur crée par défaut
+                        pthread_mutex_destroy(&player->player_mutex);
                         free(player);
 
                         // Relancer le client_handler pour le joueur reconnecté
@@ -1536,6 +1600,7 @@ int main()
                         pthread_detach(players[i]->thread);
 
                         pthread_mutex_unlock(&players_mutex);
+
                         goto next_client; // Passer au prochain client
                     }
                     else

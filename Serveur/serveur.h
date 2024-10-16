@@ -97,6 +97,8 @@ void abandon_game(player_t *player, int game_id);
 int check_game_end(int board[]);
 void end_game(game_t *game);
 void remove_game_from_player(player_t *player, game_t *game);
+void remove_game_from_games(game_t *game);
+void remove_player_from_players(player_t *player);
 
 
 #endif
